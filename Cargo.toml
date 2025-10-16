@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 windows = { version = "0.62.2", features = [
-    "UI_Popups",
+    "Globalization",
 ]}
