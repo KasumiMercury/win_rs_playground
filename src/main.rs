@@ -56,9 +56,20 @@ fn main() -> windows::core::Result<()> {
         let properties = item.GetBasicPropertiesAsync()?.join()?;
         let map = properties.RetrievePropertiesAsync(&props)?.join()?;
         if let Some(value) = map.Lookup(&names[0]).ok() {
-            println!("{}\t{:?}", item.Name()?.to_string_lossy(), value);
+            println!(
+                "{}\ttags:{:?}\tsize:{}\tmodified:{:?}",
+                item.Name()?.to_string_lossy(),
+                value,
+                properties.Size()?,
+                properties.DateModified()?
+            );
         } else {
-            println!("{}\t<no keywords>", item.Name()?.to_string_lossy());
+            println!(
+                "{}\ttags:<no keywords>\tsize:{}\tmodified:{:?}",
+                item.Name()?.to_string_lossy(),
+                properties.Size()?,
+                properties.DateModified()?
+            );
         }
     }
 
