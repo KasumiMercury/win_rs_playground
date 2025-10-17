@@ -1,6 +1,67 @@
-use windows::{Storage::StorageFile, core::HSTRING};
+use std::path::Path;
+
+use windows::{
+    Storage::{
+        FileProperties::PropertyPrefetchOptions,
+        Search::{CommonFolderQuery, FolderDepth, QueryOptions},
+        StorageFile, StorageFolder, SystemProperties,
+    },
+    core::HSTRING,
+};
+use windows_collections::IIterable;
 
 fn main() -> windows::core::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        panic!("Invalid arguments.");
+    }
+
+    let target_path: &Path = args[1].as_ref();
+
+    if !target_path.exists() || !target_path.is_dir() {
+        println!(
+            "The target path could not be found or is not a directory: {}",
+            target_path.display()
+        );
+        return Ok(());
+    }
+
+    println!("Target Path: {}", target_path.display());
+
+    let target_folder = StorageFolder::GetFolderFromPathAsync(&HSTRING::from(
+        target_path.to_string_lossy().to_string(),
+    ))?
+    .join()?;
+
+    let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::GroupByTag)?;
+    qo.SetFolderDepth(FolderDepth::Shallow)?;
+
+    let keyword = SystemProperties::Keywords()?;
+    let props = IIterable::<HSTRING>::from(vec![keyword]);
+
+    qo.SetPropertyPrefetch(PropertyPrefetchOptions::BasicProperties, &props)?;
+
+    println!("Query Setup is completed");
+
+    let item_query = target_folder.CreateItemQueryWithOptions(&qo)?;
+
+    println!("Item Query created");
+
+    let items = item_query.GetItemsAsyncDefaultStartAndCount()?.join()?;
+
+    println!("Found {} items.", items.Size()?);
+
+    for item in &items {
+        let names: [HSTRING; 1] = [SystemProperties::Keywords()?];
+        let properties = item.GetBasicPropertiesAsync()?.join()?;
+        let map = properties.RetrievePropertiesAsync(&props)?.join()?;
+        if let Some(value) = map.Lookup(&names[0]).ok() {
+            println!("{}\t{:?}", item.Name()?.to_string_lossy(), value);
+        } else {
+            println!("{}\t<no keywords>", item.Name()?.to_string_lossy());
+        }
+    }
+
     let startup_path = std::env::current_exe()?;
 
     let path_hstring = HSTRING::from(startup_path.to_string_lossy().to_string());

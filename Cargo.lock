@@ -42,6 +42,7 @@ name = "win_rs_playground"
 version = "0.1.0"
 dependencies = [
  "windows",
+ "windows-collections",
  "windows-future",
 ]
 
