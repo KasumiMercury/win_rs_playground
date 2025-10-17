@@ -33,7 +33,7 @@ fn main() -> windows::core::Result<()> {
     ))?
     .join()?;
 
-    let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::GroupByTag)?;
+    let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::DefaultQuery)?;
     qo.SetFolderDepth(FolderDepth::Shallow)?;
 
     let keyword = SystemProperties::Keywords()?;
