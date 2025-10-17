@@ -1,4 +1,4 @@
-use windows::{core::HSTRING, Globalization::ApplicationLanguages, Storage::StorageFile};
+use windows::{Storage::StorageFile, core::HSTRING};
 
 fn main() -> windows::core::Result<()> {
     let startup_path = std::env::current_exe()?;
@@ -15,12 +15,6 @@ fn main() -> windows::core::Result<()> {
         Err(e) => {
             println!("Error retrieving StorageFile: {}", e);
         }
-    }
-
-    let languages = ApplicationLanguages::Languages()?;
-    
-    for lang in languages {
-        println!("- {}", lang);
     }
 
     Ok(())
