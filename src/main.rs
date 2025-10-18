@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::VecDeque, path::Path};
 
 use windows::{
     Storage::{
@@ -26,54 +26,127 @@ fn main() -> windows::core::Result<()> {
         return Ok(());
     }
 
-    println!("Target Path: {}", target_path.display());
+    println!("Scan root: {}", target_path.display());
+
+    let mut q = VecDeque::<(StorageFolder, u32)>::new();
 
     let target_folder = StorageFolder::GetFolderFromPathAsync(&HSTRING::from(
         target_path.to_string_lossy().to_string(),
     ))?
     .join()?;
 
-    let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::DefaultQuery)?;
-    qo.SetFolderDepth(FolderDepth::Shallow)?;
+    q.push_back((target_folder, 0));
 
-    let keyword = SystemProperties::Keywords()?;
-    let props = IIterable::<HSTRING>::from(vec![keyword]);
-
-    qo.SetPropertyPrefetch(PropertyPrefetchOptions::BasicProperties, &props)?;
-
-    println!("Query Setup is completed");
-
-    let item_query = target_folder.CreateItemQueryWithOptions(&qo)?;
-
-    println!("Item Query created");
-
-    let items = item_query.GetItemsAsyncDefaultStartAndCount()?.join()?;
-
-    println!("Found {} items.", items.Size()?);
-
-    for item in &items {
-        let names: [HSTRING; 1] = [SystemProperties::Keywords()?];
-        let properties = item.GetBasicPropertiesAsync()?.join()?;
-        let map = properties.RetrievePropertiesAsync(&props)?.join()?;
-        if let Some(value) = map.Lookup(&names[0]).ok() {
+    while let Some((folder, depth)) = q.pop_front() {
+        // println!("Folder: {}", folder.Path()?.to_string_lossy());
+        println!(
+            "{} {}",
+            "  ".repeat(depth as usize),
+            folder.Name()?.to_string_lossy()
+        );
+        let files = list_file(folder.clone())?;
+        files.iter().for_each(|file_info| {
             println!(
-                "{}\ttags:{:?}\tsize:{}\tmodified:{:?}",
-                item.Name()?.to_string_lossy(),
-                value,
-                properties.Size()?,
-                properties.DateModified()?
+                "{}- {}\tsize:{}\tmodified:{:?}",
+                "  ".repeat((depth + 1) as usize),
+                file_info.name,
+                file_info.size,
+                file_info.modified
             );
-        } else {
-            println!(
-                "{}\ttags:<no keywords>\tsize:{}\tmodified:{:?}",
-                item.Name()?.to_string_lossy(),
-                properties.Size()?,
-                properties.DateModified()?
-            );
+        });
+
+        if depth < 2 {
+            let subfolders = list_folder(folder.clone())?;
+            subfolders.into_iter().for_each(|subfolder| {
+                q.push_back((subfolder, depth + 1));
+            });
         }
     }
 
+    // let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::DefaultQuery)?;
+    // qo.SetFolderDepth(FolderDepth::Shallow)?;
+
+    // let keyword = SystemProperties::Keywords()?;
+    // let props = IIterable::<HSTRING>::from(vec![keyword]);
+
+    // qo.SetPropertyPrefetch(PropertyPrefetchOptions::BasicProperties, &props)?;
+
+    // println!("Query Setup is completed");
+
+    // let item_query = target_folder.CreateItemQueryWithOptions(&qo)?;
+
+    // println!("Item Query created");
+
+    // let items = item_query.GetItemsAsyncDefaultStartAndCount()?.join()?;
+
+    // println!("Found {} items.", items.Size()?);
+
+    // for item in &items {
+    //     let names: [HSTRING; 1] = [SystemProperties::Keywords()?];
+    //     let properties = item.GetBasicPropertiesAsync()?.join()?;
+    //     let map = properties.RetrievePropertiesAsync(&props)?.join()?;
+    //     if let Some(value) = map.Lookup(&names[0]).ok() {
+    //         println!(
+    //             "{}\ttags:{:?}\tsize:{}\tmodified:{:?}",
+    //             item.Name()?.to_string_lossy(),
+    //             value,
+    //             properties.Size()?,
+    //             properties.DateModified()?
+    //         );
+    //     } else {
+    //         println!(
+    //             "{}\ttags:<no keywords>\tsize:{}\tmodified:{:?}",
+    //             item.Name()?.to_string_lossy(),
+    //             properties.Size()?,
+    //             properties.DateModified()?
+    //         );
+    //     }
+    // }
+
     Ok(())
+}
+
+struct FileInfo {
+    name: String,
+    size: u64,
+    modified: windows::Foundation::DateTime,
+}
+
+fn list_file(folder: StorageFolder) -> Result<Vec<FileInfo>> {
+    let qo = build_file_query_options()?;
+    let item_query = folder.CreateItemQueryWithOptions(&qo)?;
+
+    let items = item_query.GetItemsAsyncDefaultStartAndCount()?.join()?;
+
+    let mut file_infos = Vec::<FileInfo>::new();
+
+    for item in &items {
+        let properties = item.GetBasicPropertiesAsync()?.join()?;
+        let file_info = FileInfo {
+            name: item.Name()?.to_string_lossy().to_string(),
+            size: properties.Size()?,
+            modified: properties.DateModified()?,
+        };
+
+        file_infos.push(file_info);
+    }
+
+    Ok(file_infos)
+}
+
+fn list_folder(folder: StorageFolder) -> Result<Vec<StorageFolder>> {
+    let qo = build_folder_query_options()?;
+    let folder_query = folder.CreateFolderQueryWithOptions(&qo)?;
+
+    let subfolders = folder_query.GetFoldersAsyncDefaultStartAndCount()?.join()?;
+
+    let mut storage_folders = Vec::<StorageFolder>::new();
+
+    for subfolder in &subfolders {
+        storage_folders.push(subfolder.clone());
+    }
+
+    Ok(storage_folders)
 }
 
 fn build_file_query_options() -> Result<QueryOptions> {
