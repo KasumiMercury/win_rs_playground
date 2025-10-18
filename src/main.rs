@@ -1,14 +1,15 @@
 use std::{collections::VecDeque, path::Path};
 
 use windows::{
+    Foundation::{IPropertyValue, PropertyType},
     Storage::{
         FileProperties::PropertyPrefetchOptions,
         Search::{CommonFileQuery, CommonFolderQuery, FolderDepth, QueryOptions},
         StorageFolder, SystemProperties,
     },
-    core::{HSTRING, Result},
+    core::{Array, HSTRING, IInspectable, Interface, Result},
 };
-use windows_collections::IIterable;
+use windows_collections::{IIterable, IVectorView};
 
 fn main() -> windows::core::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -47,11 +48,12 @@ fn main() -> windows::core::Result<()> {
         let files = list_file(folder.clone())?;
         files.iter().for_each(|file_info| {
             println!(
-                "{}- {}\tsize:{}\tmodified:{:?}",
+                "{}- {}\tsize:{}\tmodified:{:?}\tkeywords:{:?}",
                 "  ".repeat((depth + 1) as usize),
                 file_info.name,
                 file_info.size,
-                file_info.modified
+                file_info.modified,
+                file_info.keywords
             );
         });
 
@@ -110,6 +112,7 @@ struct FileInfo {
     name: String,
     size: u64,
     modified: windows::Foundation::DateTime,
+    keywords: Option<Vec<String>>,
 }
 
 fn list_file(folder: StorageFolder) -> Result<Vec<FileInfo>> {
@@ -122,16 +125,64 @@ fn list_file(folder: StorageFolder) -> Result<Vec<FileInfo>> {
 
     for item in &items {
         let properties = item.GetBasicPropertiesAsync()?.join()?;
+
+        let names: [HSTRING; 1] = [SystemProperties::Keywords()?];
+        let keyword = SystemProperties::Keywords()?;
+        let props = IIterable::<HSTRING>::from(vec![keyword]);
+        let map = properties.RetrievePropertiesAsync(&props)?.join()?;
+        let keywords = if let Some(v) = map.Lookup(&names[0]).ok() {
+            Some(to_keywords(&v)?)
+        } else {
+            None
+        };
+
         let file_info = FileInfo {
             name: item.Name()?.to_string_lossy().to_string(),
             size: properties.Size()?,
             modified: properties.DateModified()?,
+            keywords,
         };
 
         file_infos.push(file_info);
     }
 
     Ok(file_infos)
+}
+
+fn to_keywords(value: &IInspectable) -> Result<Vec<String>> {
+    // まず IPropertyValue として解釈してみる
+    if let Ok(pv) = value.cast::<IPropertyValue>() {
+        match pv.Type()? {
+            PropertyType::StringArray => {
+                let mut arr: Array<HSTRING> = Array::new();
+                pv.GetStringArray(&mut arr)?; // ← ここで配列が入る
+                let v = arr.iter().map(|s| s.to_string_lossy()).collect();
+                return Ok(v);
+            }
+            PropertyType::String => {
+                // 万一、単一文字列で来た場合は 1 要素の配列として扱う
+                let s: HSTRING = pv.GetString()?;
+                return Ok(vec![s.to_string_lossy()]);
+            }
+            PropertyType::Empty => {
+                // null（未設定）のケース
+                return Ok(Vec::new());
+            }
+            _ => { /* fallthrough: 別の型かもしれない */ }
+        }
+    }
+
+    // 稀にコレクション型（IVectorView<HSTRING>）で来る API もあるためフォールバック
+    if let Ok(view) = value.cast::<IVectorView<HSTRING>>() {
+        let mut out = Vec::with_capacity(view.Size()? as usize);
+        for i in 0..view.Size()? {
+            out.push(view.GetAt(i)?.to_string_lossy());
+        }
+        return Ok(out);
+    }
+
+    // 想定外の型
+    Ok(Vec::new())
 }
 
 fn list_folder(folder: StorageFolder) -> Result<Vec<StorageFolder>> {
