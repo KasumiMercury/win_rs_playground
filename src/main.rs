@@ -3,10 +3,10 @@ use std::path::Path;
 use windows::{
     Storage::{
         FileProperties::PropertyPrefetchOptions,
-        Search::{CommonFolderQuery, FolderDepth, QueryOptions},
+        Search::{CommonFileQuery, CommonFolderQuery, FolderDepth, QueryOptions},
         StorageFolder, SystemProperties,
     },
-    core::HSTRING,
+    core::{HSTRING, Result},
 };
 use windows_collections::IIterable;
 
@@ -74,4 +74,27 @@ fn main() -> windows::core::Result<()> {
     }
 
     Ok(())
+}
+
+fn build_file_query_options() -> Result<QueryOptions> {
+    let qo = QueryOptions::CreateCommonFileQuery(
+        CommonFileQuery::DefaultQuery,
+        &IIterable::<HSTRING>::from(vec![]),
+    )?;
+    qo.SetFolderDepth(FolderDepth::Shallow)?;
+    qo.SetIndexerOption(windows::Storage::Search::IndexerOption::UseIndexerWhenAvailable)?;
+
+    let keyword = SystemProperties::Keywords()?;
+    let props = IIterable::<HSTRING>::from(vec![keyword]);
+    qo.SetPropertyPrefetch(PropertyPrefetchOptions::BasicProperties, &props)?;
+
+    Ok(qo)
+}
+
+fn build_folder_query_options() -> Result<QueryOptions> {
+    let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::DefaultQuery)?;
+    qo.SetFolderDepth(FolderDepth::Shallow)?;
+    qo.SetIndexerOption(windows::Storage::Search::IndexerOption::UseIndexerWhenAvailable)?;
+
+    Ok(qo)
 }
