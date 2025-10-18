@@ -65,46 +65,6 @@ fn main() -> windows::core::Result<()> {
         }
     }
 
-    // let qo = QueryOptions::CreateCommonFolderQuery(CommonFolderQuery::DefaultQuery)?;
-    // qo.SetFolderDepth(FolderDepth::Shallow)?;
-
-    // let keyword = SystemProperties::Keywords()?;
-    // let props = IIterable::<HSTRING>::from(vec![keyword]);
-
-    // qo.SetPropertyPrefetch(PropertyPrefetchOptions::BasicProperties, &props)?;
-
-    // println!("Query Setup is completed");
-
-    // let item_query = target_folder.CreateItemQueryWithOptions(&qo)?;
-
-    // println!("Item Query created");
-
-    // let items = item_query.GetItemsAsyncDefaultStartAndCount()?.join()?;
-
-    // println!("Found {} items.", items.Size()?);
-
-    // for item in &items {
-    //     let names: [HSTRING; 1] = [SystemProperties::Keywords()?];
-    //     let properties = item.GetBasicPropertiesAsync()?.join()?;
-    //     let map = properties.RetrievePropertiesAsync(&props)?.join()?;
-    //     if let Some(value) = map.Lookup(&names[0]).ok() {
-    //         println!(
-    //             "{}\ttags:{:?}\tsize:{}\tmodified:{:?}",
-    //             item.Name()?.to_string_lossy(),
-    //             value,
-    //             properties.Size()?,
-    //             properties.DateModified()?
-    //         );
-    //     } else {
-    //         println!(
-    //             "{}\ttags:<no keywords>\tsize:{}\tmodified:{:?}",
-    //             item.Name()?.to_string_lossy(),
-    //             properties.Size()?,
-    //             properties.DateModified()?
-    //         );
-    //     }
-    // }
-
     Ok(())
 }
 
